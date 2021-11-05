@@ -1,3 +1,6 @@
 [submodule "polygeist"]
 	path = polygeist
 	url = https://github.com/wsmoses/Polygeist
+[submodule "llvm-cbe"]
+	path = llvm-cbe
+	url = git@github.com:JuliaComputingOSS/llvm-cbe.git
