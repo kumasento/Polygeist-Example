@@ -1,0 +1,7 @@
+{
+  "files.associations": {
+    "*.maxj": "java",
+    "*.llvm": "llvm",
+    "*.inc": "cpp"
+  }
+}

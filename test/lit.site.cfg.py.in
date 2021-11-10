@@ -1,0 +1,27 @@
+@LIT_SITE_CFG_IN_HEADER@
+
+config.llvm_tools_dir = "@LLVM_TOOLS_DIR@"
+config.polygeist_tools_dir = "@LLVM_TOOLS_DIR@/../../../build/mlir-clang"
+config.clang_header_dir = "@LLVM_TOOLS_DIR@/../lib/clang/14.0.0/include"
+config.pgex_obj_root = "@PGEX_BINARY_DIR@"
+config.pgex_tools_dir = "@PGEX_TOOLS_DIR@"
+config.pgex_libs_dir = "@PGEX_LIBS_DIR@"
+config.lit_tools_dir = "@LLVM_LIT_TOOLS_DIR@"
+config.target_triple = "@TARGET_TRIPLE@"
+
+# Support substitution of the tools and build_mode with user parameters.
+# This is used when we can't determine the tool dir at configuration time.
+try:
+    config.llvm_tools_dir = config.llvm_tools_dir % lit_config.params
+    config.pgex_tools_dir = config.pgex_tools_dir % lit_config.params
+    config.polygeist_tools_dir = config.polygeist_tools_dir % lit_config.params
+    config.clang_header_dir = config.clang_header_dir % lit_config.params
+except KeyError as e:
+    key, = e.args
+    lit_config.fatal("unable to find %r parameter, use '--param=%s=VALUE'" % (key,key))
+
+import lit.llvm
+lit.llvm.initialize(lit_config, config)
+
+# Let the main config do the real work.
+lit_config.load_config(config, "@PGEX_SOURCE_DIR@/test/lit.cfg.py")

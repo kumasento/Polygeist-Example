@@ -1,0 +1,23 @@
+{
+    "configurations": [
+        {
+            "name": "Linux",
+            "includePath": [
+                "${workspaceFolder}/include",
+                "${workspaceFolder}/build/include",
+                "${workspaceFolder}/polygeist/include",
+                "${workspaceFolder}/polygeist/build/include",
+                "${workspaceFolder}/polygeist/llvm-project/llvm/include",
+                "${workspaceFolder}/polygeist/llvm-project/mlir/include",
+                "${workspaceFolder}/polygeist/llvm-project/build/include",
+                "${workspaceFolder}/polygeist/llvm-project/build/tools/mlir/include"
+            ],
+            "defines": [],
+            "compilerPath": "/mnt/ccnas2/bdp/rz3515/cccad/opt/bin/clang",
+            "cStandard": "c11",
+            "cppStandard": "c++14",
+            "intelliSenseMode": "linux-clang-x64"
+        }
+    ],
+    "version": 4
+}
