@@ -9,4 +9,9 @@ def MapToDialects : Pass<"map-to-dialects", "::mlir::ModuleOp"> {
   let constructor = "pgex::createMapToDialectsPass()";
 }
 
+def SimplifyDataflow : FunctionPass<"simplify-dataflow"> {
+  let summary = "Simplify the dataflow around bare tensor pointers.";
+  let constructor = "pgex::createSimplifyDataflowPass()";
+}
+
 #endif

@@ -36,7 +36,7 @@ ninja
 
 ## Example: mapping to TOSA and memref dialect
 
-```cc
+```c++
 #define Tensor void *
 
 template <typename T> Tensor tensor_load(T);        // -> memref.tensor_load

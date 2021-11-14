@@ -6,11 +6,12 @@
 namespace pgex {
 
 std::unique_ptr<mlir::OperationPass<mlir::ModuleOp>> createMapToDialectsPass();
+std::unique_ptr<mlir::OperationPass<mlir::FuncOp>> createSimplifyDataflowPass();
 
 /// Generate the code for registering passes.
 #define GEN_PASS_REGISTRATION
 #include "pgex/Transforms/Passes.h.inc"
 
-}  // namespace pgex
+} // namespace pgex
 
 #endif
