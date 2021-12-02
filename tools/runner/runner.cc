@@ -45,6 +45,7 @@ int main(int argc, char *argv[]) {
 
   registerMapToDialectsPass();
   registerSimplifyDataflowPass();
+  registerPtr2TsrPass();
 
   // Register any pass manager command line options.
   registerMLIRContextCLOptions();

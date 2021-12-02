@@ -83,7 +83,17 @@ static void createTensorStore(CallOp caller, const PointerToTensor &ptr2tsr,
   auto tsr = getLoadedTensor(caller, 0, ptr2tsr);
 
   b.setInsertionPointAfter(caller);
-  b.create<memref::TensorStoreOp>(loc, tsr, caller.getOperand(1));
+  // In case that the tensor is already statically shaped:
+  auto memref = caller.getOperand(1);
+  auto ty = tsr.getType().cast<TensorType>();
+  if (ty.hasStaticShape()) {
+    auto memTy = memref.getType().cast<MemRefType>();
+    memref = b.create<memref::CastOp>(
+        loc, memref,
+        MemRefType::Builder(ty.getShape(), memTy.getElementType()));
+  }
+
+  b.create<memref::TensorStoreOp>(loc, tsr, memref);
 }
 
 static void createTOSATensorAdd(CallOp caller, PointerToTensor &ptr2tsr,
@@ -165,6 +175,9 @@ static void createTOSAConv2d(CallOp caller, PointerToTensor &ptr2tsr,
   storeTensor(caller, 0, conv2d.getResult(), ptr2tsr);
 }
 
+static void createTOSAConcat(CallOp caller, PointerToTensor &ptr2tsr,
+                             OpBuilder &b) {}
+
 static void cleanUp(ModuleOp m, ArrayRef<Operation *> toErase,
                     PointerToTensor &ptr2tsr) {
   // Erase callers
@@ -206,21 +219,30 @@ struct MapToDialectsPass : public ::pgex::MapToDialectsBase<MapToDialectsPass> {
     llvm::DenseMap<mlir::Value, mlir::Value> ptr2tsr;
     SmallVector<Operation *> toErase;
 
-    // Create memref.tensor_load and tensor_store.
-    m.walk([&](CallOp caller) {
-      auto name = caller.getCallee();
-      if (name.find("tensor_load") != StringRef::npos)
-        createTensorLoad(caller, ptr2tsr, b);
-      else if (name.find("tensor_store") != StringRef::npos)
-        createTensorStore(caller, ptr2tsr, b);
-      else if (name == "tensor_add")
-        createTOSATensorAdd(caller, ptr2tsr, b);
-      else if (name.find("tensor_reshape") != StringRef::npos)
-        createTOSATensorReshape(caller, ptr2tsr, b);
-      else if (name == "tensor_conv2d")
-        createTOSAConv2d(caller, ptr2tsr, b);
+    m.walk([&](Operation *op) {
+      // Handle callers
+      if (auto caller = dyn_cast<CallOp>(op)) {
+        auto name = caller.getCallee();
+        if (name.find("tensor_load") != StringRef::npos)
+          createTensorLoad(caller, ptr2tsr, b);
+        else if (name.find("tensor_store") != StringRef::npos)
+          createTensorStore(caller, ptr2tsr, b);
+        else if (name == "tensor_add")
+          createTOSATensorAdd(caller, ptr2tsr, b);
+        else if (name.find("tensor_reshape") != StringRef::npos)
+          createTOSATensorReshape(caller, ptr2tsr, b);
+        else if (name == "tensor_conv2d")
+          createTOSAConv2d(caller, ptr2tsr, b);
 
-      toErase.push_back(caller);
+        toErase.push_back(caller);
+      } else if (auto storeOp = dyn_cast<LLVM::StoreOp>(op)) {
+        // Handle the store that stores immediately a loaded value.
+        auto toStore = storeOp.value();
+        if (auto loadOp = toStore.getDefiningOp<LLVM::LoadOp>()) {
+          // Copy tensor.
+          ptr2tsr.insert({storeOp.addr(), ptr2tsr.lookup(loadOp.addr())});
+        }
+      }
     });
 
     // Clean up

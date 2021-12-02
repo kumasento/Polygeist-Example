@@ -1,4 +1,4 @@
-// RUN: mlir-clang %std %s | runner -simplify-dataflow='duplicate' -map-to-dialects | FileCheck %s
+// RUN: mlir-clang %std %s | runner -ptr2tsr | FileCheck %s
 #include "dsl.h"
 
 int main() {

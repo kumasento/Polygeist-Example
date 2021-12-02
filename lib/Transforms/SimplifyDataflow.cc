@@ -176,14 +176,71 @@ static void bufferizeImmediateResults(FuncOp f,
     dummy.getDefiningOp()->erase();
 }
 
+static bool findParentOp(Operation *op, Operation *parent) {
+  if (!op)
+    return false;
+  if (op == parent)
+    return true;
+  if (isa<FuncOp>(op))
+    return false;
+  return findParentOp(op->getParentOp(), parent);
+}
+
+/// Make sure there is no cross region reference to the same register.
+static void reg2Mem(Block *block, llvm::SetVector<mlir::Value> &ptrs,
+                    llvm::MapVector<mlir::Value, mlir::Operation *> &scopes,
+                    llvm::SetVector<mlir::Operation *> &ignore) {
+  OpBuilder b(block->getParentOp()->getContext());
+
+  auto loadFrom = [&](const mlir::Value &src, const mlir::Value &dst,
+                      const Location loc) {
+    auto val = b.create<LLVM::LoadOp>(loc, src);
+    ignore.insert(val.getOperation());
+    ignore.insert(b.create<LLVM::StoreOp>(loc, val, dst));
+  };
+
+  for (auto &op : *block) {
+    if (isa<LLVM::LoadOp, LLVM::StoreOp>(&op) && !ignore.count(&op)) {
+      auto ptr = isa<LLVM::LoadOp>(&op) ? op.getOperand(0) : op.getOperand(1);
+      if (!ptrs.count(ptr)) // The load/store value is not a valid tensor.
+        continue;
+
+      if (scopes.lookup(ptr) != op.getParentOp()) {
+        // Not defined within the same block.
+        b.setInsertionPointAfter(ptr.getDefiningOp());
+
+        // Cloned new ptr.
+        auto cln = b.clone(*ptr.getDefiningOp())->getResult(0);
+        ptrs.insert(cln); // should track it within the ptrs.
+        scopes.insert({cln, op.getParentOp()});
+
+        // Replace all the uses within the current block.
+        ptr.replaceUsesWithIf(cln, [&](OpOperand &operand) -> bool {
+          return findParentOp(operand.getOwner(), op.getParentOp());
+        });
+
+        // Initialize the register.
+        b.setInsertionPoint(op.getParentOp());
+        loadFrom(ptr, cln, op.getLoc());
+
+        // Store the result back.
+        b.setInsertionPointAfter(op.getParentOp());
+        loadFrom(cln, ptr, op.getLoc());
+      }
+    } else {
+      for (Region &region : op.getRegions())
+        for (Block &blk : region)
+          reg2Mem(&blk, ptrs, scopes, ignore);
+    }
+  }
+}
+
 namespace {
 struct SimplifyDataflowPass
     : public ::pgex::SimplifyDataflowBase<SimplifyDataflowPass> {
   void runOnFunction() override {
     FuncOp f = getFunction();
 
-    // ---  Step 1: find all tensor pointers through the operands and results
-    // from tensor callers.
     llvm::SetVector<mlir::Value> ptrs;
     getTensorPtrRegisters(f, ptrs);
     LLVM_DEBUG({
@@ -193,9 +250,26 @@ struct SimplifyDataflowPass
       }
     });
 
-    // --- Step 2: if a register has been store multiple times, we replicate
-    // each of them.
-    duplicateMultiStore(f, ptrs);
+    // ---  Step 0: find all tensor pointers through the operands and results
+    // from tensor callers.
+    if (reg2mem) {
+      llvm::MapVector<mlir::Value, mlir::Operation *> scopes;
+
+      for (auto ptr : ptrs)
+        scopes.insert({ptr, ptr.getDefiningOp()->getParentOp()});
+
+      // --- Step 1: reg2mem.
+      llvm::SetVector<mlir::Operation *> ignore;
+      for (Block &block : f.getBlocks())
+        reg2Mem(&block, ptrs, scopes, ignore);
+    }
+
+    if (duplicate) {
+      LLVM_DEBUG(dbgs() << "Duplicate multi store.\n");
+      // --- Step 2: if a register has been store multiple times, we replicate
+      // each of them.
+      duplicateMultiStore(f, ptrs);
+    }
 
     // --- Step 3: insert a register and corresponding load store for an
     // immediate value from a tensor function call.

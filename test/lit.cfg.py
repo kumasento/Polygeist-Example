@@ -54,4 +54,13 @@ tools = [
 ]
 llvm_config.add_tool_substitutions(tools, tool_dirs)
 config.substitutions.append(("%stdinclude", "-I " + config.clang_header_dir))
-config.substitutions.append(("%std", "-S -O0 -I " + config.clang_header_dir))
+config.substitutions.append(
+    (
+        "%std",
+        "-S -O0 -I "
+        + config.clang_header_dir
+        + " -I "
+        + config.test_source_root
+        + "/../include",
+    )
+)

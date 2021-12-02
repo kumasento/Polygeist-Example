@@ -1,12 +1,6 @@
-// RUN: mlir-clang %std %s | runner -simplify-dataflow | FileCheck %s
-#define Tensor void *
+// RUN: mlir-clang %std %s | runner -simplify-dataflow='duplicate=1' | FileCheck %s
 
-template <typename T> Tensor tensor_load(T);        // -> memref.tensor_load
-template <typename T> void tensor_store(Tensor, T); // -> memref.tensor_store
-
-extern "C" {
-Tensor tensor_add(Tensor, Tensor); // -> tosa.add
-}
+#include "dsl.h"
 
 int main() {
   float din[128], dout[128];
